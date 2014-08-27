@@ -31,13 +31,15 @@ chineseIDandMean = ChineseDataread(ChinesePath);
 %读取用单词ID集合表示的句子
 sentences_meaning_number_Path = 'input\sentences_meaning_number.txt';
 sentences_meaning_number = ChineseDataread(sentences_meaning_number_Path);
+
+classNum = 370;
 %%
 fid = fopen('result\recognized sentence.txt','wt');
 for groupID = 2:2
     groupName = ['D:\iData\Outputs\ftdcgrs_whj_output\' teatDataPath '\test_' num2str(groupID) '\'];
     
     % 从1开始的209个句子编号， 而句子的ID都是从w0000开始
-    for sentenceID = 10 : 14 % length(sentence_names)    
+    for sentenceID = 2 : 2 % length(sentence_names)    
         fprintf('Processing data: Group %d--Sentence %d\n', groupID, sentenceID);
         data = importdata([groupName sentence_names{sentenceID} '.txt'], ' ', 1);
         [h, w] = size(data.data);  % h:帧数  w:维数
@@ -84,7 +86,7 @@ for groupID = 2:2
             showText_true = [sentence_names{sentenceID}(2:5) ' Groundtruth: '];
             for sign_i = 1:trueSenLen
                 sign_choosen_ID = str2num(sentences_meaning_number{1,1+sentenceID}{1,sign_i});
-                showText_true = [showText_true chineseIDandMean{1,sign_choosen_ID+1}{1,2} '-'];
+                showText_true = [showText_true chineseIDandMean{1,sign_choosen_ID+1}{1,2} '/'];
             end
             text(sum(xlim)/2-xShift_true,sum(ylim)/2-yShift_true,showText_true,'horiz','center','color','r');
             
@@ -96,7 +98,8 @@ for groupID = 2:2
                 t_= k+windowSize/2;
                 C = (1/(t_-t))*((Q{1,t_}-Q{1,t})-(1/(t_-t+1))...  
                         *((P{1,t_}-P{1,t})*(P{1,t_}-P{1,t})'));
-                    
+                lamda = 0.001 * trace(C);
+                C = C + lamda * eye(size(C, 1));   
                     % SVD Cov，得到前5维
                 [u,s,v] = svd(C);
                 Para_ARMA_test{1}.C = u(:,1:5);
@@ -106,9 +109,12 @@ for groupID = 2:2
                 VValKernel = [(1:1)',ValKernel'];
                 [predict_label_P1, accuracy_P1, dec_values_P1] = ...
                     svmpredict(test_label, VValKernel, model_precomputed,'-q');  % '-q'用来去除输出结果信息
-                result(k) = predict_label_P1;  %注意，结果是从0到369
+                result(k) = predict_label_P1;  %注意，结果是从0到369,这里表示的是sign的ID号。
+                score = dec_values_score(dec_values_P1, classNum); 
+                [score_max, index_max] = max(score);
+               
                 
-                showText = ['Frame: ' num2str(k) '; Sign: '  chineseIDandMean{1,predict_label_P1+1}{1,2}];
+                showText = ['Frame: ' num2str(k) '; Sign: '  chineseIDandMean{1,index_max}{1,2} ' / score: ' num2str(score_max)];
                 text(sum(xlim)/2-xShift,sum(ylim)/2-yShift,showText,'horiz','center','color','r');
             end
             
