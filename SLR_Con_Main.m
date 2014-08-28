@@ -33,6 +33,12 @@ sentences_meaning_number_Path = 'input\sentences_meaning_number.txt';
 sentences_meaning_number = ChineseDataread(sentences_meaning_number_Path);
 
 classNum = 370;
+rank = 5;   % 考虑前几名有效
+l_min = 30;
+l_max = 70;
+k_pre_step = 10;  % 若是没有检测到合格的sign，前进步长。
+fo_la_thre = 0.04;   %large-margin的阈值
+subSpaceSize = 5;   %子空间大小
 %%
 fid = fopen('result\recognized sentence.txt','wt');
 for groupID = 2:2
@@ -69,57 +75,92 @@ for groupID = 2:2
         end
 
         
-        VideoPath = ['D:\iData\continousSentence\P08_02\S08_' num2str(sentence_names{sentenceID}(2:5)) '_1_0_20130412.oni\color.avi'];
+        VideoPath = ['D:\iData\continousSentence\P08_02\S08_'...
+            num2str(sentence_names{sentenceID}(2:5)) '_1_0_20130412.oni\color.avi'];
         videoObj = mmreader(VideoPath);             %读视频文件
         nframes = get(videoObj, 'NumberOfFrames');  %获取视频文件帧个数
         windowSize = 50;
-        for k = 1 : nframes
-            currentFrame = read(videoObj, k);%读取第i帧
-            imshow(currentFrame);
-            xlim=get(gca,'xlim');
-            ylim=get(gca,'ylim');
-            
-            % 显示正确的意思
-            xShift_true = 150;  %文字离图像中心的偏差
-            yShift_true = 200;
-            trueSenLen = size(sentences_meaning_number{1,1+sentenceID},2);
-            showText_true = [sentence_names{sentenceID}(2:5) ' Groundtruth: '];
-            for sign_i = 1:trueSenLen
-                sign_choosen_ID = str2num(sentences_meaning_number{1,1+sentenceID}{1,sign_i});
-                showText_true = [showText_true chineseIDandMean{1,sign_choosen_ID+1}{1,2} '/'];
-            end
-            text(sum(xlim)/2-xShift_true,sum(ylim)/2-yShift_true,showText_true,'horiz','center','color','r');
-            
-            
-            xShift = 200;  %文字离图像中心的偏差
-            yShift = 100;
-            if k>windowSize/2 && k<nframes - windowSize/2
-                t = k-windowSize/2;
-                t_= k+windowSize/2;
-                C = (1/(t_-t))*((Q{1,t_}-Q{1,t})-(1/(t_-t+1))...  
-                        *((P{1,t_}-P{1,t})*(P{1,t_}-P{1,t})'));
-                lamda = 0.001 * trace(C);
-                C = C + lamda * eye(size(C, 1));   
-                    % SVD Cov，得到前5维
-                [u,s,v] = svd(C);
-                Para_ARMA_test{1}.C = u(:,1:5);
-                testID = t;    % 暂时用t代替，注意t代表时间
-                test_label(1) = t;
-                ValKernel = kernel_ARMA_Continuous(Para_ARMA_train,Para_ARMA_test,testID);
-                VValKernel = [(1:1)',ValKernel'];
-                [predict_label_P1, accuracy_P1, dec_values_P1] = ...
-                    svmpredict(test_label, VValKernel, model_precomputed,'-q');  % '-q'用来去除输出结果信息
-                result(k) = predict_label_P1;  %注意，结果是从0到369,这里表示的是sign的ID号。
-                score = dec_values_score(dec_values_P1, classNum); 
-                [score_max, index_max] = max(score);
-               
+        %result = zeros(1,nframes) -1;   %初始化result
+        
+        k_pre = 1;
+        showText_result1 = 'none';
+        showText_result2 = 'none';
+        recognizeSignNum = 1;
+        for k=1:nframes
+            if k <= l_min + k_pre;
+                currentFrame = read(videoObj, k);%读取第i帧
+                imshow(currentFrame);
+                xlim=get(gca,'xlim');
+                ylim=get(gca,'ylim');
+
+                % 显示正确的意思
+                trueSenLen = size(sentences_meaning_number{1,1+sentenceID},2);
+                showText_true = ['Sentence ' sentence_names{sentenceID}(2:5) ', '...
+                   num2str(k) '/' num2str(nframes) ' frames, '];
+                for sign_i = 1:trueSenLen
+                    sign_choosen_ID = str2num(sentences_meaning_number{1,1+sentenceID}{1,sign_i});
+                    showText_true = [showText_true chineseIDandMean{1,sign_choosen_ID+1}{1,2} '/'];
+                end
+                text(sum(xlim)/2-0,sum(ylim)/2-210,showText_true,'horiz','center','color','r');
                 
-                showText = ['Frame: ' num2str(k) '; Sign: '  chineseIDandMean{1,index_max}{1,2} ' / score: ' num2str(score_max)];
-                text(sum(xlim)/2-xShift,sum(ylim)/2-yShift,showText,'horiz','center','color','r');
+                %l_count = '0';
+                if k == l_min + k_pre
+                    l_range = l_max-l_min+1;
+                    score_sort = zeros(l_range,classNum);
+                    index_sort = zeros(l_range,classNum)-1;
+                    formerRankScore = zeros(l_range,1);
+                    latterRankScore = zeros(l_range,1);
+                    for l = l_min:l_max
+                        t = k_pre;
+                        t_= min(k_pre + l,nframes);
+                        
+                        %l_count = num2str(l);
+                        fprintf('Current loop: %d \n', l);
+                        
+                        % 快速计算cov及其子空间，即GRASP。
+                        Para_ARMA_test{1}.C = grasp_region(t, t_, P, Q, subSpaceSize);
+
+                        test_label(1) = t;
+                        ValKernel = kernel_ARMA_Continuous(Para_ARMA_train,Para_ARMA_test);
+                        VValKernel = [(1:1)',ValKernel'];
+                        [predict_label_P1, accuracy_P1, dec_values_P1] = ...
+                            svmpredict(test_label, VValKernel, model_precomputed,'-q');  % '-q'用来去除输出结果信息
+                        % 计算SVM的概率，来自one-to-one的信息.
+                        score = dec_values_score(dec_values_P1, classNum); 
+
+                        [score_sort(l-l_min+1,:),index_sort(l-l_min+1,:)] = sort(score,'descend');
+                        formerRankScore(l-l_min+1) = mean(score_sort(l-l_min+1,1:rank));
+                        latterRankScore(l-l_min+1) = mean(score_sort(l-l_min+1,rank+1:3*rank));
+                    end
+
+                    [maxY_fo_la, maxI_fo_la] = max(formerRankScore - latterRankScore);
+                    index_max = index_sort(maxI_fo_la,1);
+                    score_max = score_sort(maxI_fo_la,1);
+                        %记录结果
+                    results(sentenceID,recognizeSignNum) = index_max-1;
+                    recognizeSignNum = recognizeSignNum + 1;
+                    
+                    if maxY_fo_la > fo_la_thre
+                        showText_result1 = ['Period: ' num2str(k_pre) '-' num2str(k_pre + l_min + maxI_fo_la)...
+                            ' /Sign: ' chineseIDandMean{1,index_max}{1,2}...
+                            '  /score: ' num2str(score_max)];
+
+                        showText_result2 = ['former: ' num2str(formerRankScore(maxI_fo_la))...
+                            ' /latter: ' num2str(latterRankScore(maxI_fo_la))...
+                            ' /fo_la: ' num2str(maxY_fo_la)];
+                        k_pre = k_pre + l_min + maxI_fo_la;
+                    else
+                        k_pre = k_pre + k_pre_step;
+                    end
+                end
+                %text(sum(xlim)/2-200,sum(ylim)/2-110,l_count,'horiz','center','color','r');
+                text(sum(xlim)/2-200,sum(ylim)/2-150,showText_result1,'horiz','center','color','r');
+                text(sum(xlim)/2-200,sum(ylim)/2-130,showText_result2,'horiz','center','color','r');
+                drawnow;    %实时更新命令
             end
-            
-            drawnow;    %实时更新命令
+
         end
+
 
 
 %         segPosition = dataread(segPath, sentenceID+1);
@@ -180,4 +221,110 @@ for groupID = 2:2
 end
 fclose(fid);
 
+%% 废弃代码
+%         k_p = 1;
+%         for k = 1 : nframes-l_max
+%         k = 1;
+%         while k < nframes-l_max
+%             
+%             currentFrame = read(videoObj, k);%读取第i帧
+%             imshow(currentFrame);
+%             xlim=get(gca,'xlim');
+%             ylim=get(gca,'ylim');
+%             
+%             % 显示正确的意思
+%             trueSenLen = size(sentences_meaning_number{1,1+sentenceID},2);
+%             showText_true = [sentence_names{sentenceID}(2:5) ' Groundtruth: '];
+%             for sign_i = 1:trueSenLen
+%                 sign_choosen_ID = str2num(sentences_meaning_number{1,1+sentenceID}{1,sign_i});
+%                 showText_true = [showText_true chineseIDandMean{1,sign_choosen_ID+1}{1,2} '/'];
+%             end
+%             text(sum(xlim)/2-0,sum(ylim)/2-210,showText_true,'horiz','center','color','r');
+%             
+% 
+%             l_range = l_max-l_min+1;
+%             score_sort = zeros(l_range,classNum);
+%             index_sort = zeros(l_range,classNum)-1;
+%             formerRankScore = zeros(l_range,1);
+%             latterRankScore = zeros(l_range,1);
+%             for l = l_min:l_max
+%                 t = k;
+%                 t_= k + l;
+% 
+%                 % 快速计算cov及其子空间，即GRASP。
+%                 Para_ARMA_test{1}.C = grasp_region(t, t_, P, Q, subSpaceSize);
+% 
+%                 test_label(1) = t;
+%                 ValKernel = kernel_ARMA_Continuous(Para_ARMA_train,Para_ARMA_test);
+%                 VValKernel = [(1:1)',ValKernel'];
+%                 [predict_label_P1, accuracy_P1, dec_values_P1] = ...
+%                     svmpredict(test_label, VValKernel, model_precomputed,'-q');  % '-q'用来去除输出结果信息
+%                 % 计算SVM的概率，来自one-to-one的信息.
+%                 score = dec_values_score(dec_values_P1, classNum); 
+% 
+%                 [score_sort(l-l_min+1,:),index_sort(l-l_min+1,:)] = sort(score,'descend');
+%                 formerRankScore(l-l_min+1) = mean(score_sort(l-l_min+1,1:rank));
+%                 latterRankScore(l-l_min+1) = mean(score_sort(l-l_min+1,rank+1:3*rank));
+%             end
+% 
+%             [maxY_fo_la, maxI_fo_la] = max(formerRankScore - latterRankScore);
+%             index_max = index_sort(maxI_fo_la,1);
+%             score_max = score_sort(maxI_fo_la,1);
+%             if maxY_fo_la > fo_la_thre
+%                 showText = ['Frame: ' num2str(k) '; Sign: '...
+%                 chineseIDandMean{1,index_max}{1,2} ' / score: ' num2str(score_max)];
+%                 text(sum(xlim)/2-200,sum(ylim)/2-150,showText,'horiz','center','color','r');
+% 
+%                 showText = ['former: ' num2str(formerRankScore(maxI_fo_la))...
+%                     ' /latter: ' num2str(latterRankScore(maxI_fo_la))...
+%                     ' /fo_la: ' num2str(maxY_fo_la)];
+%                 text(sum(xlim)/2-200,sum(ylim)/2-130,showText,'horiz','center','color','r');
+%                 
+%                 k = k + l_min + maxI_fo_la;
+%             else
+%                 showText = 'None';
+%                 text(sum(xlim)/2-200,sum(ylim)/2-130,showText,'horiz','center','color','r');
+%                 
+%                 k = k + 10;
+%             end
+% 
+%             
+%             
+% 
+% %             if k>windowSize/2 && k<nframes - windowSize/2
+% %                 t = k-windowSize/2;
+% %                 t_= k+windowSize/2;
+% %                 
+% %                 % 快速计算cov及其子空间，即GRASP。
+% %                 Para_ARMA_test{1}.C = grasp_region(t, t_, P, Q, subSpaceSize);
+% %                 
+% %                 test_label(1) = t;
+% %                 ValKernel = kernel_ARMA_Continuous(Para_ARMA_train,Para_ARMA_test);
+% %                 VValKernel = [(1:1)',ValKernel'];
+% %                 [predict_label_P1, accuracy_P1, dec_values_P1] = ...
+% %                     svmpredict(test_label, VValKernel, model_precomputed,'-q');  % '-q'用来去除输出结果信息
+% %                 result(k) = predict_label_P1;  % 注意，结果是从0到369,这里表示的是sign的ID号。
+% %                 score = dec_values_score(dec_values_P1, classNum); 
+% %                 [score_max, index_max] = max(score); % 注意，index_max是从1到370。
+% %                 [score_sort,index_sort] = sort(score,'descend');
+% %                 formerRankScore = mean(score_sort(1:rank));
+% %                 latterRankScore = mean(score_sort(rank+1:3*rank));
+% %                
+% %                 if formerRankScore - latterRankScore > fo_la_thre
+% %                     showText = ['Frame: ' num2str(k) '; Sign: '...
+% %                     chineseIDandMean{1,index_max}{1,2} ' / score: ' num2str(score_max)];
+% %                     text(sum(xlim)/2-200,sum(ylim)/2-150,showText,'horiz','center','color','r');
+% % 
+% %                     showText = ['former: ' num2str(formerRankScore) ' /latter: ' num2str(latterRankScore)];
+% %                     text(sum(xlim)/2-200,sum(ylim)/2-130,showText,'horiz','center','color','r');
+% %                 else
+% %                     showText = 'None';
+% %                     text(sum(xlim)/2-200,sum(ylim)/2-130,showText,'horiz','center','color','r');
+% %                 end
+% %                 
+% %                 
+% %             end
+%             
+%             drawnow;    %实时更新命令
+%         end
 

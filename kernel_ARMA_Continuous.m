@@ -1,4 +1,4 @@
-function outKernel = kernel_ARMA(SY1,SY2,testID)
+function outKernel = kernel_ARMA_Continuous(SY1,SY2)
 
 if (nargin<1)
     error('Not enough inputs');
