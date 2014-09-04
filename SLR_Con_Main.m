@@ -11,14 +11,16 @@ addpath('CRF\bin');
 addpath('CRF');
 
 load CRF\result_dim10_97_R
-load data\Model_ARMA_CTC_334to5_allFrame_370sign_P50
+load data\model_MultiSeg_370sign_forP50_new
 sign_names = importdata('input\signs_283.txt');   % signs_97  signs_283
 sentence_names = importdata('input\sentences_209.txt');
 teatDataPath = 'dim334_CTskp_fullFrame_209sentences'; 
-segPath = 'input\segManually_P08_02.txt';
 % dim334_CTskp_fullFrame_209sentences 
 % dim10_Tskp_fullFrame_209sentences
 % dim61_CTskp_fullFrame_209sentences
+% dim334_CTskp_allFrame_369sign
+segPath = 'input\segManually_P08_02.txt';
+
 
 idx = strfind(teatDataPath,'_');
 dimFinalIdx = idx(1,1)-1;
@@ -33,19 +35,20 @@ sentences_meaning_number_Path = 'input\sentences_meaning_number.txt';
 sentences_meaning_number = ChineseDataread(sentences_meaning_number_Path);
 
 classNum = 370;
-rank = 5;   % 考虑前几名有效
-l_min = 30;
+rank = 2;   % 考虑前几名有效
+l_min = 60;
 l_max = 70;
 k_pre_step = 10;  % 若是没有检测到合格的sign，前进步长。
-fo_la_thre = 0.04;   %large-margin的阈值
+fo_la_thre = 0.03;   %large-margin的阈值
 subSpaceSize = 5;   %子空间大小
+draw = 1;    %1:显示视频。 0：不显示视频
 %%
 fid = fopen('result\recognized sentence.txt','wt');
-for groupID = 2:2
+for groupID =  2:2
     groupName = ['D:\iData\Outputs\ftdcgrs_whj_output\' teatDataPath '\test_' num2str(groupID) '\'];
     
     % 从1开始的209个句子编号， 而句子的ID都是从w0000开始
-    for sentenceID = 2 : 2 % length(sentence_names)    
+    for sentenceID = 2:2 %length(sentence_names)    
         fprintf('Processing data: Group %d--Sentence %d\n', groupID, sentenceID);
         data = importdata([groupName sentence_names{sentenceID} '.txt'], ' ', 1);
         [h, w] = size(data.data);  % h:帧数  w:维数
@@ -74,6 +77,9 @@ for groupID = 2:2
             Q{1,t} = TestData(:,1:t)*TestData(:,1:t)';
         end
 
+        % D:\iData\isolatedWord\P50\P50_0000_1_0_20121002.oni
+%         VideoPath = ['D:\iData\isolatedWord\P50\P50_'...
+%             num2str(sentence_names{sentenceID}(2:5)) '_1_0_20121002.oni\color.avi'];
         
         VideoPath = ['D:\iData\continousSentence\P08_02\S08_'...
             num2str(sentence_names{sentenceID}(2:5)) '_1_0_20130412.oni\color.avi'];
@@ -85,14 +91,17 @@ for groupID = 2:2
         k_pre = 1;
         showText_result1 = 'none';
         showText_result2 = 'none';
+        showText_result_candidate = 'none';
         recognizeSignNum = 1;
         for k=1:nframes
-            if k <= l_min + k_pre;
-                currentFrame = read(videoObj, k);%读取第i帧
-                imshow(currentFrame);
-                xlim=get(gca,'xlim');
-                ylim=get(gca,'ylim');
-
+            if k <= l_max + k_pre;
+                if draw == 1
+                    currentFrame = read(videoObj, k);%读取第i帧
+                    imshow(currentFrame);
+                    xlim=get(gca,'xlim');
+                    ylim=get(gca,'ylim');
+                end
+            
                 % 显示正确的意思
                 trueSenLen = size(sentences_meaning_number{1,1+sentenceID},2);
                 showText_true = ['Sentence ' sentence_names{sentenceID}(2:5) ', '...
@@ -104,18 +113,18 @@ for groupID = 2:2
                 text(sum(xlim)/2-0,sum(ylim)/2-210,showText_true,'horiz','center','color','r');
                 
                 %l_count = '0';
-                if k == l_min + k_pre
+                if k == l_max + k_pre || k==nframes
                     l_range = l_max-l_min+1;
                     score_sort = zeros(l_range,classNum);
                     index_sort = zeros(l_range,classNum)-1;
                     formerRankScore = zeros(l_range,1);
                     latterRankScore = zeros(l_range,1);
-                    for l = l_min:l_max
-                        t = k_pre;
+                    for l = l_min:3:l_max
+                        t = min(k_pre, nframes-1);
                         t_= min(k_pre + l,nframes);
                         
                         %l_count = num2str(l);
-                        fprintf('Current loop: %d \n', l);
+                        %fprintf('Current loop: %d %d %d\n', l, t, t_);
                         
                         % 快速计算cov及其子空间，即GRASP。
                         Para_ARMA_test{1}.C = grasp_region(t, t_, P, Q, subSpaceSize);
@@ -134,7 +143,7 @@ for groupID = 2:2
                     end
 
                     [maxY_fo_la, maxI_fo_la] = max(formerRankScore - latterRankScore);
-                    index_max = index_sort(maxI_fo_la,1);
+                    index_max = index_sort(maxI_fo_la,1);  %该maxI_fo_la的第1位
                     score_max = score_sort(maxI_fo_la,1);
                         %记录结果
                     results(sentenceID,recognizeSignNum) = index_max-1;
@@ -148,15 +157,26 @@ for groupID = 2:2
                         showText_result2 = ['former: ' num2str(formerRankScore(maxI_fo_la))...
                             ' /latter: ' num2str(latterRankScore(maxI_fo_la))...
                             ' /fo_la: ' num2str(maxY_fo_la)];
+                        
+                        showText_result_candidate = ['Candidates: ' chineseIDandMean{1,index_sort(maxI_fo_la,2)}{1,2} '/'...
+                            chineseIDandMean{1,index_sort(maxI_fo_la,3)}{1,2} '/'...
+                            chineseIDandMean{1,index_sort(maxI_fo_la,4)}{1,2} '/'...
+                            chineseIDandMean{1,index_sort(maxI_fo_la,5)}{1,2} ];
                         k_pre = k_pre + l_min + maxI_fo_la;
                     else
+                        showText_result1 = ['Period: ' num2str(k_pre) '-any: None'];
+                        showText_result2 = 'None';
+                        showText_result_candidate = 'None';
                         k_pre = k_pre + k_pre_step;
                     end
                 end
-                %text(sum(xlim)/2-200,sum(ylim)/2-110,l_count,'horiz','center','color','r');
-                text(sum(xlim)/2-200,sum(ylim)/2-150,showText_result1,'horiz','center','color','r');
-                text(sum(xlim)/2-200,sum(ylim)/2-130,showText_result2,'horiz','center','color','r');
-                drawnow;    %实时更新命令
+                if draw == 1
+                    %text(sum(xlim)/2-200,sum(ylim)/2-110,l_count,'horiz','center','color','r');
+                    text(sum(xlim)/2-200,sum(ylim)/2-150,showText_result1,'horiz','center','color','r');
+                    text(sum(xlim)/2-200,sum(ylim)/2-130,showText_result2,'horiz','center','color','r');
+                    text(sum(xlim)/2-200,sum(ylim)/2-110,showText_result_candidate,'horiz','center','color','r');
+                    drawnow;    %实时更新命令
+                end
             end
 
         end
