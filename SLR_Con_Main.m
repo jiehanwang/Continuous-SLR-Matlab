@@ -48,7 +48,7 @@ for groupID =  2:2
     groupName = ['D:\iData\Outputs\ftdcgrs_whj_output\' teatDataPath '\test_' num2str(groupID) '\'];
     
     % 从1开始的209个句子编号， 而句子的ID都是从w0000开始
-    for sentenceID = 2:2 %length(sentence_names)    
+    for sentenceID = 6:6 %length(sentence_names)    
         fprintf('Processing data: Group %d--Sentence %d\n', groupID, sentenceID);
         data = importdata([groupName sentence_names{sentenceID} '.txt'], ' ', 1);
         [h, w] = size(data.data);  % h:帧数  w:维数
