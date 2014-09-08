@@ -1,7 +1,7 @@
 clear all;
 clc;
 %%
-path_01  = 'D:\iData\Outputs\ftdcgrs_whj_output\dim334_CTskp_allFrame_369sign\test_51\';
+path_01  = 'D:\iData\Outputs\ftdcgrs_whj_output\dim334_CTskp_fullFrame_370sign\test_54\';
 
 % addpath(genpath('./RF_Class_C/.'));
 names = importdata('sign_370.txt');
