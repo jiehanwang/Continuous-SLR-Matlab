@@ -11,9 +11,9 @@ addpath('CRF\bin');
 addpath('CRF');
 
 load CRF\result_dim10_97_R
-load data\model_MultiSeg_370sign_forP50_new
-% model_MultiSeg_notFrom1_370sign_forP50_new
-% model_MultiSeg_370sign_forP50_new
+load data\model_MultiSeg_370sign_forP1_new
+% model_MultiSeg_notFrom1_370sign_forP1_new
+% model_MultiSeg_370sign_forP1_new
 sentence_names = importdata('input\sentences_209.txt');
 teatDataPath = 'dim334_CTskp_allFrame_manually_209sentences'; 
 % dim334_CTskp_fullFrame_209sentences 
@@ -36,6 +36,7 @@ sentences_meaning_number = ChineseDataread(sentences_meaning_number_Path);
 
 classNum = 370;
 subSpaceSize = 5;   %子空间大小
+sample = 5;    %隔n帧采样
 draw = 0;    %1:显示视频。 0：不显示视频
 windowSize = 40;   %滑动窗口的大小
 %%
@@ -44,7 +45,7 @@ for groupID =  1:1
     groupName = ['D:\iData\Outputs\ftdcgrs_whj_output\' teatDataPath '\test_' num2str(groupID) '\'];
     
     % 从1开始的209个句子编号， 而句子的ID都是从w0000开始
-    for sentenceID = 102:105 %length(sentence_names)    
+    for sentenceID = 101:101 %length(sentence_names)    
         fprintf('Processing data: Group %d--Sentence %d\n', groupID, sentenceID);
         data = importdata([groupName sentence_names{sentenceID} '.txt'], ' ', 1);
         [h, w] = size(data.data);  % h:帧数  w:维数
@@ -78,7 +79,7 @@ for groupID =  1:1
                 text(sum(xlim)/2-0,sum(ylim)/2-210,showText_true,'horiz','center','color','r');
             end
 
-            if k>windowSize/2 && k<nframes - windowSize/2 && mod(k,5)==0
+            if k>windowSize/2 && k<nframes - windowSize/2 && mod(k,sample)==0
                 t = k - windowSize/2;
                 t_= k + windowSize/2;
 
