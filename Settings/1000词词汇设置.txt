@@ -1,0 +1,38 @@
+%% Settings and Initials
+addpath(genpath('D:\iCode\GitHub\libsvm\matlab'));
+
+% 读取模型库
+load data\model_MultiSeg_1000sign_forP1_new
+
+
+% 读取 class_correlation变量。即，类间关系图。
+load data\class_correlation_model_1000;   
+
+
+% 读取测试库
+sentence_names = importdata('input\sentences_100.txt');
+teatDataPath = 'dim334_CTskp_allFrame_manually_100sentences_1000sign'; 
+
+
+% 读取用单词ID集合表示的句子
+sentences_meaning_number_Path = 'input\sentence_meaning_ID_random_1000.txt';  
+sentences_meaning_number = ChineseDataread(sentences_meaning_number_Path);
+
+% 从文件名确定当前的维数
+idx = strfind(teatDataPath,'_');
+dimFinalIdx = idx(1,1)-1;
+dim = str2double(teatDataPath(4:dimFinalIdx));
+
+% 读取中文意思和对应的ID号
+ChinesePath = 'input\wordlist_4414.txt';
+chineseIDandMean = ChineseDataread(ChinesePath);
+
+% 读取测试词汇ID
+vocabulary = importdata('input\sign_1000_zeng.txt');
+
+classNum = 1000;    % 370
+subSpaceSize = 10;  % 子空间大小  5
+gap = 2;            % 隔n帧采样
+thre = 0.68;        % score>thre 的视为有效
+draw = 0;           % 1:显示视频。 0：不显示视频
+windowSize = 60;    % 滑动窗口的大小

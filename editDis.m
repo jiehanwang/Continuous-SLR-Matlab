@@ -60,7 +60,10 @@ while i>=1 && j>=1
         insert = insert +1;
     end
 
-    if i==1 || j==1
+    if i==1 && j==1
+        delete = delete - 1;    %回溯到最开始的位置，因为初始化是1,1指代delete，会多计算一次。故减去。
+        break;
+    elseif i==1 || j==1
         break;
     else
         temp_i = i;

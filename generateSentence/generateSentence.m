@@ -1,15 +1,15 @@
 clear all;
 clc;
 %%
-path_01  = 'D:\iData\Outputs\ftdcgrs_whj_output\dim334_CTskp_allFrame_369sign\test_54\';
-dim = 334;
+% path_01  = 'D:\iData\Outputs\ftdcgrs_whj_output\dim334_CTskp_allFrame_369sign\test_51\';
+path_01  = 'D:\iData\Outputs\ftdcgrs_whj_output\dim61_CTskp_allFrame_1000sign_zeng\test_30\';
 
 % addpath(genpath('./RF_Class_C/.'));
-names = importdata('sign_370.txt');
-sentence_names = importdata('sentences_209.txt');
+% names = importdata('sign_370.txt');
+sentence_names = importdata('sentences_100.txt');
 
 %读取用单词ID集合表示的句子
-sentences_meaning_number_Path = 'sentences_meaning_number.txt';
+sentences_meaning_number_Path = 'sentence_meaning_ID_random_1000.txt';
 sentences_meaning_number = ChineseDataread(sentences_meaning_number_Path);
 
  fileFolder=['mkdir ' 'output\groundTruth'];    
@@ -28,7 +28,16 @@ for s = 1:length(sentence_names)
     nframes = 0;
     for i=1:size(sentence,2)
         sign_index = str2double(sentence{i}) + 1;
-        data = importdata([path_01 names{sign_index} '.txt'], ' ', 1);
+        if str2double(sentence{i})<10
+            name_ID_w = ['w000' sentence{i}];
+        elseif str2double(sentence{i})<100
+            name_ID_w = ['w00' sentence{i}];
+        elseif str2double(sentence{i})<1000
+            name_ID_w = ['w0' sentence{i}];
+        elseif str2double(sentence{i})<10000
+            name_ID_w = ['w' sentence{i}];
+        end
+        data = importdata([path_01 name_ID_w '.txt'], ' ', 1);
         [frame,dim] = size(data.data);
         nframes = nframes + frame;
     end
@@ -36,14 +45,23 @@ for s = 1:length(sentence_names)
     fprintf(fid_groundTruth,'%d %d\n',nframes, 1);
     for i=1:size(sentence,2)
         sign_index = str2double(sentence{i}) + 1;
-        data = importdata([path_01 names{sign_index} '.txt'], ' ', 1);
+        if str2double(sentence{i})<10
+            name_ID_w = ['w000' sentence{i}];
+        elseif str2double(sentence{i})<100
+            name_ID_w = ['w00' sentence{i}];
+        elseif str2double(sentence{i})<1000
+            name_ID_w = ['w0' sentence{i}];
+        elseif str2double(sentence{i})<10000
+            name_ID_w = ['w' sentence{i}];
+        end
+        data = importdata([path_01 name_ID_w '.txt'], ' ', 1);
 
         data_content = data.data;
         for row = 1:size(data_content,1)
             for col = 1:size(data_content,2)
                 fprintf(fid,'%f ',data_content(row, col));    
             end
-            fprintf(fid_groundTruth, '%d \n', str2double(names{sign_index}(2:5)));
+            fprintf(fid_groundTruth, '%d \n', str2double(sentence{i}));
             fprintf(fid, '\n');
         end
 
