@@ -12,7 +12,7 @@ addpath(genpath('D:\iCode\GitHub\libsvm\matlab'));
 
 
 % 读取模型库
-load data\model_MultiSeg_370sign_forP1_new
+load data\model_NoSeg_370sign_forP3
 
 
 % 读取 class_correlation变量。即，类间关系图。
@@ -21,11 +21,11 @@ load data\class_correlation_model;
 
 % 读取测试库
 sentence_names = importdata('input\sentences_100.txt');
-teatDataPath = 'dim334_CTskp_allFrame_manually_209sentences'; 
+teatDataPath = 'dim334_CTskp_allFrame_manually_100sentences_370sign'; 
 
 
 % 读取用单词ID集合表示的句子
-sentences_meaning_number_Path = 'input\sentences_meaning_number.txt';  
+sentences_meaning_number_Path = 'input\sentence_meaning_ID_random_370.txt';  
 sentences_meaning_number = ChineseDataread(sentences_meaning_number_Path);
 
 % 从文件名确定当前的维数
@@ -38,17 +38,21 @@ ChinesePath = 'input\wordlist_370.txt';
 chineseIDandMean = ChineseDataread(ChinesePath);
 
 % 读取测试词汇ID
-vocabulary = importdata('input\sign_370.txt');
+% vocabulary = importdata('input\sign_370.txt');
+vocabulary = model_precomputed.Label;
 
 classNum = 370;     % 370
 subSpaceSize = 5;   % 子空间大小  5
-gap = 1;            % 隔n帧采样
-thre = 0.78;        % score>thre 的视为有效
+gap = 3;            % 隔n帧采样
+thre = 0.0;        % score>thre 的视为有效
 draw = 0;           % 1:显示视频。 0：不显示视频
 windowSize = 40;    % 滑动窗口的大小
+fidName = ['result\result' '_HierarSegModel_thre' num2str(thre) '_skip' ...
+    num2str(gap) '_win' num2str(windowSize) '_random100_370sign_BP2D_limitNO_G3.txt' ];
+fid = fopen(fidName,'wt');
 %%
-fid = fopen('result\result.txt','wt');
-for groupID =  1:1
+tic;
+for groupID =  3:3
 %     groupName = ['E:\user\hjwang\data\' teatDataPath '\test_' num2str(groupID) '\'];
 %     groundTruthFileFolderName = ['E:\user\hjwang\data\' teatDataPath...
 %         '\groundTruth_' num2str(groupID) '\'];
@@ -69,8 +73,8 @@ for groupID =  1:1
     totalDelete = 0;
     totalSubstitute = 0;
     
-    % 从1开始的209个句子编号， 而句子的ID都是从w0000开始
-    for sentenceID = 1:length(sentence_names)    
+    % 从1开始的句子编号， 而句子的ID都是从w0000开始
+    for sentenceID = 1:1%length(sentence_names)    
         sign_recognized_ID = [];
         sign_recognized_ID_Final = [];
         fprintf('Processing data: Group %d--Sentence %d\n', groupID, sentenceID);
@@ -81,6 +85,7 @@ for groupID =  1:1
         groundTruth = groundTruth_.data;
         nframes = size(TestData, 2);
         correctFrame = 0;
+        selectFrame = 0;
         currentLabel = -1;    % 因为不是每帧都有label，用这个变量分配每帧的label。
         
         %首先通过一个函数建立cov快查表
@@ -138,11 +143,11 @@ for groupID =  1:1
             
             % Rank 1 大于阈值的视为有效
             if score_sort(1) > thre
-                for topN = 1:5
-                    TopNindex_ID(topN,TopNcount) = index_sort(topN)-1;
-                    TopNscore_ID(topN,TopNcount) = score_sort(topN);
-                end
-                TopNcount = TopNcount + 1;
+%                 for topN = 1:5
+%                     TopNindex_ID(topN,TopNcount) = index_sort(topN)-1;
+%                     TopNscore_ID(topN,TopNcount) = score_sort(topN);
+%                 end
+%                 TopNcount = TopNcount + 1;
                 score_all = [score_all score'];
 
                 showText_result1 = ['Sign: '...
@@ -152,7 +157,7 @@ for groupID =  1:1
                      chineseIDandMean{1,index_sort(3)}{1,2} '/'...
                      chineseIDandMean{1,index_sort(4)}{1,2} '/'...
                      chineseIDandMean{1,index_sort(5)}{1,2} ];
-                currentLabel = predict_label_P1;
+%                 currentLabel = predict_label_P1;
 
                 % 如果label不重复的话就记录，否则取消记录。
                  if recognizeCount == 0
@@ -166,23 +171,26 @@ for groupID =  1:1
                  else
                      labelCount(recognizeCount) = labelCount(recognizeCount) + 1;
                  end
+                 
+                 % 正确的帧数统计
+                 totalFrames = totalFrames + 1;
+                 selectFrame = selectFrame +1;
+                 if predict_label_P1 == groundTruth(k) 
+                     totalCorrectFrame = totalCorrectFrame + 1;
+                     correctFrame = correctFrame + 1;
+                 end
             end
             
             % 正确的帧数统计
-            if currentLabel == groundTruth(k)
-                correctFrame = correctFrame + 1;
-            end
-            
-            if draw == 1
-                text(sum(xlim)/2-200,sum(ylim)/2-150,showText_result1,'horiz','center','color','r');
-                text(sum(xlim)/2-200,sum(ylim)/2-130,showText_result2,'horiz','center','color','r');
-                drawnow;    %实时更新命令
-            else
-                clc;
-                fprintf('%s \n%s \n%s \n%s \n', showText_pace, showText_true, showText_result1,showText_result2);
-            end
+%             if currentLabel == groundTruth(k)
+%             if predict_label_P1 == groundTruth(k)
+%                 correctFrame = correctFrame + 1;
+%             end
+
+            clc;
+            fprintf('%s \n%s \n%s \n%s \n', showText_pace, showText_true, showText_result1,showText_result2);
         end
-        
+        toc;
         %-------------------------------------------------------------------
         % 对句子的整体parsing.
         
@@ -214,10 +222,10 @@ for groupID =  1:1
         totalSubstitute = totalSubstitute+substitute;
         
         % 输出结果
-        fprintf(fid, 'S%s:\t%d\t%d\t%f\t%d\t%d\t%f\t%d\t%d\t%d\t%d\n', sentence_names{sentenceID}(2:5), correctFrame, nframes-windowSize...
-            , correctFrame/(nframes-windowSize),correctSign, trueSenLen, correctSign/trueSenLen, distance, insert, delete, substitute);
-        totalFrames = totalFrames + nframes-windowSize;
-        totalCorrectFrame = totalCorrectFrame + correctFrame;
+        fprintf(fid, 'S%s:\t%d\t%d\t%f\t%d\t%d\t%f\t%d\t%d\t%d\t%d\n', sentence_names{sentenceID}(2:5), correctFrame, selectFrame...
+            , correctFrame/selectFrame,correctSign, trueSenLen, correctSign/trueSenLen, distance, insert, delete, substitute);
+%         totalFrames = totalFrames + nframes-windowSize;
+%         totalCorrectFrame = totalCorrectFrame + correctFrame;
     end
     
     % 输出最后统计结果
@@ -225,6 +233,7 @@ for groupID =  1:1
         totalFrames, totalCorrectFrame/totalFrames, totalCorrectSign, totalsigns,...
         totalCorrectSign/totalsigns, totalDistance,totalInsert,totalDelete,totalSubstitute);
 end
+
 fclose(fid);
 
 

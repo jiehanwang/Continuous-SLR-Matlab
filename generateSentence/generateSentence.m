@@ -1,15 +1,14 @@
 clear all;
 clc;
 %%
-% path_01  = 'D:\iData\Outputs\ftdcgrs_whj_output\dim334_CTskp_allFrame_369sign\test_51\';
-path_01  = 'D:\iData\Outputs\ftdcgrs_whj_output\dim61_CTskp_allFrame_1000sign_zeng\test_30\';
+% path_01  = 'D:\iData\Outputs\ftdcgrs_whj_output\dim61_CTskp_allFrame_369sign\test_52\';
+% dim334_CTskp_allFrame_369sign
+path_01  = 'D:\iData\Outputs\ftdcgrs_whj_output\dim61_CTskp_allFrame_1000sign_7group\test_19\';
 
-% addpath(genpath('./RF_Class_C/.'));
-% names = importdata('sign_370.txt');
 sentence_names = importdata('sentences_100.txt');
 
 %读取用单词ID集合表示的句子
-sentences_meaning_number_Path = 'sentence_meaning_ID_random_1000.txt';
+sentences_meaning_number_Path = 'sentence_meaning_ID_random_100.txt';
 sentences_meaning_number = ChineseDataread(sentences_meaning_number_Path);
 
  fileFolder=['mkdir ' 'output\groundTruth'];    

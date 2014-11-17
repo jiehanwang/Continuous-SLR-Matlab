@@ -1,23 +1,15 @@
 clear all;
-clc;
-load score_all_sentence1;
-sign_groundTruth_ID = [301 60 238 22 156 215 314 206 252 365];
+load b-61;
+load score_61;
 
-
-score_all_new = cell(3,1);
-size_score = size(score_all{1},2);
-for i=1:size_score
-    maxScore = max(max(max(score_all{1}(:,i)),max(score_all{2}(:,i))), max(score_all{3}(:,i)));
-    if   maxScore > 0.77  % max(score_all{2}(:,i)) > 0.75
-        for w=1:3
-            score_all_new{w} = [score_all_new{w} score_all{w}(:,i)];
-        end
+for i=1:216
+    for j=1:29
+        b_norm_fl(i,j) = (1-b_norm(i,j)^2)^0.5;
     end
 end
 
-sign_recognized_ID_Final = BP_3D(score_all_new, 370);
-% sign_recognized_ID_Final = BP_2D(score_all_new{2}, 370,40);
-
-[distance, insert, delete, substitute, correctSign] = editDis(sign_groundTruth_ID, sign_recognized_ID_Final);
-
-fprintf('Distance: %d, Correctness: %d \n', distance, correctSign);
+x=[1:29];
+se=[4,6,18,75,85,99];
+b_norm_fl_se = b_norm_fl(se,:);
+plot(x, b_norm_fl_se);
+% plot(x, score_all);

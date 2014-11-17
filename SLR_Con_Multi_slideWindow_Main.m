@@ -9,18 +9,21 @@ clc;
 addpath(genpath('D:\iCode\GitHub\libsvm\matlab'));
 
 % 读取模型库
-load data\model_MultiSeg_370sign_forP1_new
+load data\model_HierarSeg_370sign_forP3
+
+% 读取 class_correlation变量。即，类间关系图。
+load data\class_correlation_model;   % class_correlation: 370*370
 
 % 读取测试库
 sentence_names = importdata('input\sentences_100.txt');
-teatDataPath = 'dim334_CTskp_allFrame_manually_100sentences'; 
+teatDataPath = 'dim334_CTskp_allFrame_manually_100sentences_370sign'; 
 % dim334_CTskp_fullFrame_209sentences 
 % dim334_CTskp_allFrame_manually_209sentences
 % dim334_CTskp_fullFrame_manually_209sentences
-% dim334_CTskp_allFrame_manually_100sentences
+% dim334_CTskp_allFrame_manually_100sentences_370sign
 
 % 读取用单词ID集合表示的句子
-sentences_meaning_number_Path = 'input\sentence_meaning_ID_random.txt';  % sentences_meaning_number
+sentences_meaning_number_Path = 'input\sentence_meaning_ID_random_370.txt';  % sentences_meaning_number
 sentences_meaning_number = ChineseDataread(sentences_meaning_number_Path);
 
 % 从文件名确定当前的维数
@@ -32,16 +35,21 @@ dim = str2double(teatDataPath(4:dimFinalIdx));
 ChinesePath = 'input\wordlist_370.txt';
 chineseIDandMean = ChineseDataread(ChinesePath);
 
+% 读取测试词汇ID
+vocabulary = model_precomputed.Label;
+
 classNum = 370;
 subSpaceSize = 5;   % 子空间大小
-gap = 1;            % 隔n帧采样
-thre = 0.75;        % score>thre 的视为有效  0.77
-windowSizes(1) = 20; % 滑动窗口的大小
+gap = 3;            % 隔n帧采样
+thre = 0.85;        % score>thre 的视为有效  0.77
+windowSizes(1) = 30; % 滑动窗口的大小
 windowSizes(2) = 40;
 windowSizes(3) = 60;
+fidName = ['result\result' '_HierarSegModel_thre' num2str(thre) '_skip' ...
+    num2str(gap) '_win' num2str(windowSizes(1)) num2str(windowSizes(2)) num2str(windowSizes(3)) '_random100_370sign_BP3D_2vots_G3.txt' ];
+fid = fopen(fidName,'wt');
 %%
-fid = fopen('result\result.txt','wt');
-for groupID =  1:1
+for groupID =  3:3
     groupName = ['D:\iData\Outputs\ftdcgrs_whj_output\' teatDataPath '\test_' num2str(groupID) '\'];
     groundTruthFileFolderName = ['D:\iData\Outputs\ftdcgrs_whj_output\' teatDataPath...
         '\groundTruth_' num2str(groupID) '\'];
@@ -71,6 +79,7 @@ for groupID =  1:1
         groundTruth = groundTruth_.data;
         nframes = size(TestData, 2);
         correctFrame = 0;
+        selectFrame = 0;
         currentLabel = -1;    % 因为不是每帧都有label，用这个变量分配每帧的label。
         
         %首先通过一个函数建立cov快查表
@@ -105,8 +114,8 @@ for groupID =  1:1
                    num2str(k) '/' num2str(nframes) ' frames, repetition:' num2str(w)];
                
                % 快速计算Cov及其子空间，即GCM。
-                t = max(k - windowSize/2, 1);
-                t_= min(k + windowSize/2, nframes);
+                t = max(k - floor(windowSize/2), 1);
+                t_= min(k + floor(windowSize/2), nframes);
                 Para_ARMA_test{1}.C = grasp_region(t, t_, P, Q, subSpaceSize);
                 
                 test_label(1) = t;
@@ -118,21 +127,22 @@ for groupID =  1:1
 
                 % 计算SVM的概率，来自one-to-one的信息.
                 score = dec_values_score(dec_values_P1, classNum); 
-                [score_sort, index_sort] = sort(score,'descend');
+%                 [score_sort, index_sort] = sort(score,'descend');
+                score_max = max(score);
                 
                 % Rank 1 的概率大于阈值的视为有效
-                if score_sort(1) > 0
+                if score_max > 0
                     % score_all{w} = [score_all{w} score'];
                     score_all{w}(:,k) = score';
 
                     showText_result1 = ['Sign: '...
-                        chineseIDandMean{1,index_max}{1,2} ' /score' num2str(score_sort(1))...
+                        chineseIDandMean{1,index_max}{1,2} ' /score' num2str(score_max)...
                         ' /groundTruth: ' chineseIDandMean{1,groundTruth(k)+1}{1,2}];
-                    showText_result2 = ['Candidates: ' chineseIDandMean{1,index_sort(2)}{1,2} '/'...
-                         chineseIDandMean{1,index_sort(3)}{1,2} '/'...
-                         chineseIDandMean{1,index_sort(4)}{1,2} '/'...
-                         chineseIDandMean{1,index_sort(5)}{1,2} ];
-                    currentLabel = predict_label_P1;
+%                     showText_result2 = ['Candidates: ' chineseIDandMean{1,index_sort(2)}{1,2} '/'...
+%                          chineseIDandMean{1,index_sort(3)}{1,2} '/'...
+%                          chineseIDandMean{1,index_sort(4)}{1,2} '/'...
+%                          chineseIDandMean{1,index_sort(5)}{1,2} ];
+%                     currentLabel = predict_label_P1;
 
                     % 如果label不重复的话就记录，否则取消记录。
                      if recognizeCount == 0
@@ -146,12 +156,19 @@ for groupID =  1:1
                      else
                          labelCount(recognizeCount) = labelCount(recognizeCount) + 1;
                      end
+                      % 正确的帧数统计
+                     totalFrames = totalFrames + 1;
+                     selectFrame = selectFrame + 1;
+                     if predict_label_P1 == groundTruth(k) 
+                         totalCorrectFrame = totalCorrectFrame + 1;
+                         correctFrame = correctFrame+1;
+                     end
                 end
                 
-                % 正确的帧数统计
-                if currentLabel == groundTruth(k)
-                    correctFrame = correctFrame + 1;
-                end
+%                 % 正确的帧数统计
+%                 if currentLabel == groundTruth(k)
+%                     correctFrame = correctFrame + 1;
+%                 end
 
                 clc;
                 fprintf('%s \n%s \n%s \n%s \n', showText_pace, showText_true, showText_result1,showText_result2);
@@ -174,7 +191,7 @@ for groupID =  1:1
         % 对句子的整体parsing.
 
         % Spotting with BP_3D
-        sign_recognized_ID_Final = BP_3D(score_all_new, classNum);
+        sign_recognized_ID_Final = BP_3D(score_all_new, classNum, vocabulary, class_correlation);
         %-------------------------------------------------------------------
         
         % 此处对识别和groundTruth这两个序列作比较，返回增删改的数目并统计。 Delete, Insert, Substitue
@@ -186,10 +203,10 @@ for groupID =  1:1
         totalSubstitute = totalSubstitute+substitute;
         
         % 输出结果
-        fprintf(fid, 'S%s:\t%d\t%d\t%f\t%d\t%d\t%f\t%d\t%d\t%d\t%d\n', sentence_names{sentenceID}(2:5), correctFrame, nframes-windowSize...
-            , correctFrame/(nframes-windowSize),correctSign, trueSenLen, correctSign/trueSenLen, distance, insert, delete, substitute);
-        totalFrames = totalFrames + nframes-windowSize;
-        totalCorrectFrame = totalCorrectFrame + correctFrame;
+        fprintf(fid, 'S%s:\t%d\t%d\t%f\t%d\t%d\t%f\t%d\t%d\t%d\t%d\n', sentence_names{sentenceID}(2:5), correctFrame, selectFrame...
+            , correctFrame/selectFrame,correctSign, trueSenLen, correctSign/trueSenLen, distance, insert, delete, substitute);
+%         totalFrames = totalFrames + nframes-windowSize;
+%         totalCorrectFrame = totalCorrectFrame + correctFrame;
     end
     
     % 输出最后统计结果
