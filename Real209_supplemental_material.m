@@ -33,20 +33,26 @@ ChinesePath = 'input\wordlist_370.txt';
 chineseIDandMean = ChineseDataread(ChinesePath);
 
 % 读取测试词汇ID
-% vocabulary = importdata('input\sign_150_forReal209.txt');
 vocabulary = model_precomputed.Label;
 
-classNum = 242;     % 
+%读物单词分割信息
+segment_info_path = 'segManually_P08_02.txt';
+segment_info_temp = sentenceIDDataread(segment_info_path);
+
+
+% 一些设置
+classNum = 242;     % 词汇大小
 subSpaceSize = 5;   % 子空间大小  5
 gap = 3;            % 隔n帧采样
-thre = 0.8;        % score>thre 的视为有效
+thre = 0.8;         % score>thre 的视为有效
 draw = 1;           % 1:显示视频。 0：不显示视频
 windowSize = 30;    % 滑动窗口的大小
 cutRegion = 40;
 fidName = ['result\result' '_2SegModel_thre' num2str(thre) '_skip' ...
     num2str(gap) '_win' num2str(windowSize) '_Real209_242sign_BP2D_G0801_show.txt' ];
 fid = fopen(fidName,'wt');
-%%
+
+%% Testing
 for groupID =  1:1
     groupName = ['D:\iData\Outputs\ftdcgrs_whj_output\' teatDataPath '\test_' num2str(groupID) '\'];
     groundTruthFileFolderName = ['D:\iData\Outputs\ftdcgrs_whj_output\' teatDataPath...
@@ -68,7 +74,6 @@ for groupID =  1:1
     % 从1开始的句子编号， 而句子的ID都是从w0000开始
     for sentenceID = 3:3%length(sentence_names)    
         sign_recognized_ID = [];
-        sign_recognized_ID_Final = [];
         fprintf('Processing data: Group %d--Sentence %d\n', groupID, sentenceID);
         data = importdata([groupName sentence_names{sentenceID} '.txt'], ' ', 1);
         %groundTruth_ = importdata([groundTruthFileFolderName sentence_names{sentenceID} '.txt'], ' ', 1);
@@ -117,14 +122,6 @@ for groupID =  1:1
         for k=cutRegion:gap:nframes-cutRegion
             showText_pace = ['Sentence ID: ' sentence_names{sentenceID}(2:5) ', '...
                    num2str(k) '/' num2str(nframes) ' frames, '];
-            if draw == 1
-                currentFrame = read(videoObj, k);%读取第i帧
-                imshow(currentFrame);
-                xlim=get(gca,'xlim');
-                ylim=get(gca,'ylim');
-                % 显示正确的意思
-                text(sum(xlim)/2-0,sum(ylim)/2-210,showText_true,'horiz','center','color','r');
-            end
             
             % 快速计算Cov及其子空间，即GCM。
             t = max(k - windowSize/2, 1);
@@ -148,9 +145,9 @@ for groupID =  1:1
             % Rank 1 大于阈值的视为有效
             if score_max > thre
                 score_all = [score_all score'];
-
+                
                 showText_result1 = ['Sign: '...
-                    chineseIDandMean{1,index_max}{1,2} ' /score' num2str(score_max)...
+                    chineseIDandMean{1,index_max}{1,2} '----score' num2str(score_max)...
                     ' /groundTruth: ' ];
                 showText_result2 = ['Candidates: ' chineseIDandMean{1,index_sort(2)}{1,2} '/'...
                      chineseIDandMean{1,index_sort(3)}{1,2} '/'...
@@ -170,15 +167,65 @@ for groupID =  1:1
                  else
                      labelCount(recognizeCount) = labelCount(recognizeCount) + 1;
                  end
+            else
+                showText_result1 = 'Non-sign';
+                showText_result2 = 'Non-sign';
             end
             
             clc;
             fprintf('%s \n%s \n%s \n%s \n', showText_pace, showText_true, showText_result1,showText_result2);
             
             if draw == 1
+                
+                % 找到单词切分点，以及将每个单词分成若干层级的段.
+                ce = str2double(sentence_names{sentenceID,1}(2:5))+1;
+                sizeSeg = size(segment_info_temp{1,ce+1},2)-3;
+                segPoints=[];
+                segPoints.sentenceID = str2double(segment_info_temp{1,ce+1}(1,1));
+                piont_i = 1;
+                bar = zeros(10,640,3);   %建立进度条
+                bar(:,:,1)=0;
+                bar(:,:,2)=255;
+                bar(:,:,3)=0;
+                for i=1:sizeSeg
+                    if mod(i,2)==1
+                        segPoints.seg(piont_i,1) = str2double(segment_info_temp{1,ce+1}(1,i+1));
+                        segPoints.seg(piont_i,2) = str2double(segment_info_temp{1,ce+1}(1,i+2));
+                        segPoints.seg(piont_i,3) = str2double(sentences_meaning_number{1,1+ce}{1,piont_i});
+                        bar(:,floor(segPoints.seg(piont_i,1)*640/nframes): ...
+                            floor(segPoints.seg(piont_i,2)*640/nframes),1)=255; %segPoints.seg(piont_i,3);
+                        bar(:,floor(segPoints.seg(piont_i,1)*640/nframes): ...
+                            floor(segPoints.seg(piont_i,2)*640/nframes),2)=0; %segPoints.seg(piont_i,3);
+                        bar(:,floor(segPoints.seg(piont_i,1)*640/nframes): ...
+                            floor(segPoints.seg(piont_i,2)*640/nframes),3)=0; %segPoints.seg(piont_i,3);
+                        piont_i = piont_i+1; 
+                    end
+                end
+                
+                % 显示图像
+                currentFrame = read(videoObj, k);%读取第i帧
+                currentFrame(480:640,:,:) = 0;
+                
+%                 step = floor(640/nframes);
+                process = zeros(10,640,3); 
+                process(:,1:floor(640*k/nframes),:)=1;
+                currentFrame(481:490,:,:) = bar.*process;
+                
+                imshow(currentFrame);
+                xlim=get(gca,'xlim');
+                ylim=get(gca,'ylim');
+                
+                
+                % 显示正确的意思
+                text(sum(xlim)/2-300,sum(ylim)/2+200,showText_true,'horiz', ...
+                    'left','color','r', 'Fontname', 'Times newman', 'Fontsize', 15);
+                
+                
                 %text(sum(xlim)/2-200,sum(ylim)/2-110,l_count,'horiz','center','color','r');
-                text(sum(xlim)/2-200,sum(ylim)/2-150,showText_result1,'horiz','center','color','r');
-%                 text(sum(xlim)/2-200,sum(ylim)/2-130,showText_result2,'horiz','center','color','r');
+                text(sum(xlim)/2-300,sum(ylim)/2+220,showText_result1,'horiz','left','color','r', ...
+                    'Fontname', 'Times newman', 'Fontsize', 15);
+                text(sum(xlim)/2-300,sum(ylim)/2+240,showText_result2,'horiz','left','color','r', ...
+                    'Fontname', 'Times newman', 'Fontsize', 15);
 %                 text(sum(xlim)/2-200,sum(ylim)/2-110,showText_result_candidate,'horiz','center','color','r');
                 drawnow;    %实时更新命令
             end

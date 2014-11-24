@@ -1,0 +1,2 @@
+The test group: G_1 
+sentenceID:/correctFrame/totalFrame/rate_frame/correctSign/groundtruth/rate_sign/distance/insert/delete/substitute
